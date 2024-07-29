@@ -1,0 +1,26 @@
+{
+    "seed": 42,
+    "device" : "cuda:0",
+
+    "config": {
+        "model_id" : "MLP-KTLim/llama-3-Korean-Bllossom-8B",
+        "chunk_size": 100,
+        "top_k": 3
+    },
+    
+    "path": {
+        "data_path": "resource/data/일상대화요약_train.json",
+        "db_name": "legalQA",
+        "template_name": "template"
+    },
+
+    "inference" : {
+        "do_sample": "False",
+        "num_beams": 1,
+        "temperature": 1.0,
+        "top_k" : 50,
+        "top_p" : 1,
+        "no_repeat_ngram_size" : 0
+    }
+
+}
