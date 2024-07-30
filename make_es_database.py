@@ -17,7 +17,7 @@ ES_USER = os.getenv("ES_USER")
 ES_PASSWORD = os.getenv("ES_PASSWORD")
 ES_API_KEY = os.getenv("ES_API_KEY")
 
-CONFIG_FILE_NAME = ""
+CONFIG_FILE_NAME = "config.json"
 
 def main(config: Dict):
     parser = argparse.ArgumentParser()
@@ -25,14 +25,14 @@ def main(config: Dict):
     g.add_argument("--model_id", type=str, default=config["config"]["model_id"], help="model id")
     g.add_argument("--chunk_size", type=str, default=config["config"]["chunk_size"], help="data chunk size")
     g.add_argument("--overlap_size", type=str, default=config["config"]["overlap_size"], help="chunk overlapping size")
-    g.add_argument("--data_path", type=str, default=config["path"]["data_path"], help="data path")
+    g.add_argument("--data_file_name", type=str, default=config["path"]["data_file_name"], help="data path")
     g.add_argument("--data_name", type=str, default=config["path"]["data_name"], help="data index name to save")
     g.add_argument("--cache_dir", type=str, default="./cache", help="cache directory path")
     
     args = parser.parse_args()
 
     print("## Settings ##")
-    print("## data_path : ", args.data_path)
+    print("## data_file_name : ", args.data_file_name)
     print("## data_name : ", args.data_name)
     print("## chunk_size : ", args.chunk_size)
 
@@ -46,12 +46,14 @@ def main(config: Dict):
         embedding=hf
     )
 
-    # 그냥 config path 전달하는 걸로 바꾸자..
+    # 전처리에 동일한 config 전달
+    # list[Document] 형태로 반환됨
+    # 예시 : [Document(page_content='중도 퇴사 후 ...'), ...]
     batchtext = data_preprocess(CONFIG_FILE_NAME)
 
     print("## Preprocess Completed!! ##")
     print("## Add Data to ElasticSearch DB.. ##")
-    
+
     # DB에 텍스트 데이터 추가
     db.from_texts(batchtext, 
                   embedding=hf,

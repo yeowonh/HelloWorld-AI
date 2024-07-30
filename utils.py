@@ -3,24 +3,34 @@ import re
 import pandas as pd
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from transformers import AutoTokenizer
+import os
+from langchain.docstore.document import Document
 
 # 전처리 및 청킹 -> 리스트 형태의 텍스트 반환
-def data_preprocess(CONFIG_FILE_NAME: str) -> list:
+def data_preprocess(CONFIG_FILE_NAME: str) -> Document:
     with open(f'configs/{CONFIG_FILE_NAME}', 'r') as f:
         config = json.load(f)
 
     MODEL_ID = config['config']['model_id']
     CHUNK_SIZE = config['config']['chunk_size']
     OVERLAP_SIZE = config['config']['overlap_size']
-    DATA_PATH = config['config']['data_path']
+    DATA_FILE_NAME = config['path']['data_file_name']
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     tokenizer.pad_token = tokenizer.eos_token
 
     print('## config file loaded ##')
 
-    with open(f'{DATA_PATH}', 'r') as f:
+    with open(os.path.join('data/', DATA_FILE_NAME), 'r') as f:
         data = json.load(f)
+    
+    titles = []; contents = []
+
+    for row in data:
+        titles.append(row['title'])
+        contents.append(row['content'])
+
+    print(f'## raw data (length : {len(data)}) loaded ##')
     
     # 특수 문자를 제거하고 연속된 공백을 하나로 줄인다.
     def remove_escape(raw_text: str) -> str:
@@ -90,12 +100,18 @@ def data_preprocess(CONFIG_FILE_NAME: str) -> list:
         return processed_text
 
     # RAG style : title + [SEP] + contents
+    # seperation 지정되어 있지 않음 -> 공백으로 처리
     def make_chunk_data(titles: list, contents: list) -> list:
-        chunk_data = [title + tokenizer.sep_token + content for title, content in zip(titles, contents)]
+        if tokenizer.sep_token != None:
+            print('## seperated by : ', tokenizer.sep_token)
+            chunk_data = [title + tokenizer.sep_token + content for title, content in zip(titles, contents)]
+        else:
+            chunk_data = [title + " " + content for title, content in zip(titles, contents)]
+        
         return chunk_data
 
     # 토크나이저 기준 분할
-    def data_chunking(titles: list, contents: list) -> list:
+    def data_chunking(titles: list, contents: list) -> Document:
         text_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
             tokenizer,
             chunk_size=CHUNK_SIZE,
@@ -106,8 +122,7 @@ def data_preprocess(CONFIG_FILE_NAME: str) -> list:
 
         return chunks
         
-    titles = data['title']
-    contents = data['content']
+    
     preprocess_functions = [
         remove_hanja,
         remove_header,
