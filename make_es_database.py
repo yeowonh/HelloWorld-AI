@@ -24,6 +24,7 @@ def main(config: Dict):
     g = parser.add_argument_group("Settings")
     g.add_argument("--model_id", type=str, default=config["config"]["model_id"], help="model id")
     g.add_argument("--chunk_size", type=str, default=config["config"]["chunk_size"], help="data chunk size")
+    g.add_argument("--overlap_size", type=str, default=config["config"]["overlap_size"], help="chunk overlapping size")
     g.add_argument("--data_path", type=str, default=config["path"]["data_path"], help="data path")
     g.add_argument("--data_name", type=str, default=config["path"]["data_name"], help="data index name to save")
     g.add_argument("--cache_dir", type=str, default="./cache", help="cache directory path")
@@ -45,9 +46,12 @@ def main(config: Dict):
         embedding=hf
     )
 
-    batchtext = data_preprocess(args.data_path, args.chunk_size)
+    # 그냥 config path 전달하는 걸로 바꾸자..
+    batchtext = data_preprocess(CONFIG_FILE_NAME)
+
     print("## Preprocess Completed!! ##")
     print("## Add Data to ElasticSearch DB.. ##")
+    
     # DB에 텍스트 데이터 추가
     db.from_texts(batchtext, 
                   embedding=hf,
