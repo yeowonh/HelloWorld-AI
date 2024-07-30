@@ -4,12 +4,13 @@
 
     "config": {
         "model_id" : "MLP-KTLim/llama-3-Korean-Bllossom-8B",
-        "chunk_size": 100,
+        "chunk_size": 500,
+        "overlap_size": 100,
         "top_k": 3
     },
     
     "path": {
-        "data_path": "resource/data/일상대화요약_train.json",
+        "data_file_name": "merged.json",
         "db_name": "legalQA",
         "template_name": "template"
     },
