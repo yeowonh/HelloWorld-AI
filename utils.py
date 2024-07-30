@@ -1,49 +1,128 @@
 import json
-def data_preprocess(data_path, chunk_size):
-    with open(f'{data_path}', 'r') as f:
+import re
+import pandas as pd
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from transformers import AutoTokenizer
+
+# 전처리 및 청킹 -> 리스트 형태의 텍스트 반환
+def data_preprocess(CONFIG_FILE_NAME: str) -> list:
+    with open(f'configs/{CONFIG_FILE_NAME}', 'r') as f:
+        config = json.load(f)
+
+    MODEL_ID = config['config']['model_id']
+    CHUNK_SIZE = config['config']['chunk_size']
+    OVERLAP_SIZE = config['config']['overlap_size']
+    DATA_PATH = config['config']['data_path']
+
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    tokenizer.pad_token = tokenizer.eos_token
+
+    print('## config file loaded ##')
+
+    with open(f'{DATA_PATH}', 'r') as f:
         data = json.load(f)
-        
-    """
-    # batchtext 형태로 만들어주기
-    # 그냥 리스트에 개행 문자만 붙여주고 다 때려 넣기
-    # title + ' ' + passage
-    # passage는 100 words 단위로 chunking
+    
+    # 특수 문자를 제거하고 연속된 공백을 하나로 줄인다.
+    def remove_escape(raw_text: str) -> str:
+        pattern = r"\t|\n|\xa0"
+        processed_text = re.sub(pattern, " ", raw_text)
+        processed_text_stripped = " ".join(processed_text.split())
+        return processed_text_stripped
 
-    import copy
-
-    N = 100
-
-    remove_idx = []
-    cnt = 0
-
-    # content에 title도 포함되어 있음
-    for idx in tqdm(range(len(data))):
-        content_words = data.loc[idx, 'contents'].split(' ')
-        title_words = data.loc[idx, 'title'].split(' ')
-
-        # 원본 row 삭제 후 100 단어씩 청킹한거 넣기
-        if len(content_words) + len(title_words) > N:
-            remove_idx.append(idx)
-            chunks = [content_words[i:i+N-len(title_words)] for i in range(0, len(content_words), N-len(title_words))]
-            cnt += len(chunks)
-
-            for chunk in chunks:
-                tmp = copy.deepcopy(data.loc[idx]) # 행 복사
-                tmp['text'] = data.loc[idx, 'title'] + ' ' + ' '.join(chunk)
-                data = pd.concat([data, tmp.to_frame().T], ignore_index=True)
-        
+    def remove_hanja(text):
+        # Unicode 범위를 사용하여 한자 제거
+        return re.sub(r'[\u4e00-\u9fff]+', '', text)
+    
+    #하이퍼링크 제거
+    def remove_hyperlink(raw_text: str) -> str:
+        pattern = (
+            r":*\s*\(*:*\s*https?://[\w\dㄱ-ㅎㅏ-ㅣ가-힣!@#$%^&*(),.?/:;\"'<>{}|+=~_-]+\s*\)*"
+        )
+        processed_text = re.sub(pattern, "", raw_text)
+        return processed_text
+    
+    #텍스트 시작 부분 헤더 제거
+    def remove_header(raw_text: str) -> str:
+        header_pattern = "안녕하십니까. 대한법률구조공단 사이버상담을 이용해 주셔서 감사합니다."
+        header_end_idx = re.search(header_pattern, raw_text)
+        if header_end_idx != None:
+            processed_text = raw_text[header_end_idx.end() :]
+            return processed_text
         else:
-            data.loc[idx, 'text'] = data.loc[idx, 'title'] + ' ' + ' '.join(content_words)
+            return raw_text
+        
+    #텍스트 끝 부분 푸터 제거
+    def remove_footer(raw_text: str) -> str:
+        footer_pattern = "※ 주의 : 사례에 대한 답변은 법령이나 판례 등의 변경으로 내용이 바뀔 수 있으므로 구체적인 사안에 대해서는 반드시 대한법률구조공단 상담(전화상담은 국번없이 ☎ 132) 등을 통해 다시 한 번 확인하시기 바랍니다."
+        footer_start_idx = re.search(footer_pattern, raw_text)
+        if footer_start_idx != None:
+            processed_text = raw_text[: footer_start_idx.start()]
+            return processed_text
+        else:
+            return raw_text
+    
+    def remove_author_and_url(text):
+        # 작성자 정보 제거
+        text = re.sub(r'작성자:\s*[\w\s]+', '', text)
+        
+        # URL 제거
+        text = re.sub(r'URL:\s*https?://\S+', '', text)
+        
+        # 마지막 줄바꿈 제거
+        text = text.strip()
+        
+        return text
+    
+    #특정 키워드가 포함된 문장 제거
+    def remove_page_word(raw_text: str) -> str:
+        pattern = '사이버상담|사이버 상담|공단|방문|국번없이 132|132번'
+        if re.findall(pattern, raw_text) == []:
+            return raw_text
+        
+        split_text = raw_text.split('.')
+        remove_text = [i for i in split_text if re.findall(pattern, i) == []]        
 
+        return '.'.join(remove_text)
 
-    print('## chunked data : ', len(remove_idx))
-    print('## appended data : ', cnt)
+    def remove_phone_number(raw_text: str) -> str:
+        pattern = r'\b(\d{2,3}-\d{3,4}-\d{4}|\d{2}-\d{3}-\d{4})\b'
+        processed_text = re.sub(pattern, "", raw_text)
+        return processed_text
 
-    data.drop(remove_idx, inplace=True)
+    # RAG style : title + [SEP] + contents
+    def make_chunk_data(titles: list, contents: list) -> list:
+        chunk_data = [title + tokenizer.sep_token + content for title, content in zip(titles, contents)]
+        return chunk_data
 
-    data.sort_values(by = ['category', 'sub_category', 'title'])
-    data.reset_index(drop=True, inplace=True)
-    """
-    batchtext = list(data['text'])
+    # 토크나이저 기준 분할
+    def data_chunking(titles: list, contents: list) -> list:
+        text_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
+            tokenizer,
+            chunk_size=CHUNK_SIZE,
+            chunk_overlap=OVERLAP_SIZE
+        )
+        chunk_data = make_chunk_data(titles, contents)
+        chunks = text_splitter.create_documents(chunk_data)
 
-    return batchtext
+        return chunks
+        
+    titles = data['title']
+    contents = data['content']
+    preprocess_functions = [
+        remove_hanja,
+        remove_header,
+        remove_footer,
+        #remove_escape,
+        remove_phone_number,
+        #remove_page_word,
+        remove_hyperlink,
+        remove_author_and_url,
+        #remove_link,
+    ]
+
+    for preprocess_function in preprocess_functions:
+        contents = list(map(preprocess_function, contents))
+
+    chunks = data_chunking(titles, contents)
+
+    return chunks
