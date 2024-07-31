@@ -24,11 +24,12 @@ def data_preprocess(CONFIG_FILE_NAME: str) -> Document:
     with open(os.path.join('data/', DATA_FILE_NAME), 'r') as f:
         data = json.load(f)
     
-    titles = []; contents = []
+    titles = []; contents = []; sources = []
 
     for row in data:
         titles.append(row['title'])
         contents.append(row['content'])
+        sources.append({'source': row['source']})
 
     print(f'## raw data (length : {len(data)}) loaded ##')
     
@@ -111,14 +112,14 @@ def data_preprocess(CONFIG_FILE_NAME: str) -> Document:
         return chunk_data
 
     # 토크나이저 기준 분할
-    def data_chunking(titles: list, contents: list) -> Document:
+    def data_chunking(titles: list, contents: list, sources: list) -> Document:
         text_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
             tokenizer,
             chunk_size=CHUNK_SIZE,
             chunk_overlap=OVERLAP_SIZE
         )
         chunk_data = make_chunk_data(titles, contents)
-        chunks = text_splitter.create_documents(chunk_data)
+        chunks = text_splitter.create_documents(chunk_data, sources)
 
         return chunks
         
@@ -138,6 +139,6 @@ def data_preprocess(CONFIG_FILE_NAME: str) -> Document:
     for preprocess_function in preprocess_functions:
         contents = list(map(preprocess_function, contents))
 
-    chunks = data_chunking(titles, contents)
+    chunks = data_chunking(titles, contents, sources)
 
     return chunks
