@@ -55,7 +55,7 @@ def main(config: Dict):
     print("## Add Data to ElasticSearch DB.. ##")
 
     # DB에 텍스트 데이터 추가
-    db.from_texts(batchtext, 
+    db.from_documents(batchtext, 
                   embedding=hf,
                   es_cloud_id=ES_CLOUD_ID,
                   es_user=ES_USER,
