@@ -2,8 +2,8 @@ from huggingface_hub import HfApi
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_name')
-parser.add_argument('--file_path')
+parser.add_argument('--model_name', default="llama-3-Korean-Bllossom-8B-Q5_K_M")
+parser.add_argument('--file_path', default="bllossom/llama-3-Korean-Bllossom-8B-Q5_K_M.gguf")
 args = parser.parse_args()
 
 def main(args):

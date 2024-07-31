@@ -3,7 +3,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_id', default="MLP-KTLim/llama-3-Korean-Bllossom-8B")
-parser.add_argument('--local_dir', default="./bllossom")
+parser.add_argument('--local_dir', default="./bllossom/")
 args = parser.parse_args()
 
 def main(args):
