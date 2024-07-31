@@ -9,7 +9,7 @@ from typing import Dict
 import json
 from langchain import PromptTemplate, HuggingFaceHub, LLMChain
 from langchain.llms import HuggingFacePipeline
-from transformers import AutoTokenizer, pipeline, AutoModelForSeq2SeqLM, AutoModelForCausalLM
+from transformers import AutoTokenizer, pipeline, AutoModelForCausalLM, PretrainedConfig
 import torch
 from langchain_elasticsearch import ElasticsearchStore
 from langchain.embeddings import HuggingFaceEmbeddings
@@ -20,8 +20,8 @@ ES_USER = os.getenv("ES_USER")
 ES_PASSWORD = os.getenv("ES_PASSWORD")
 ES_API_KEY = os.getenv("ES_API_KEY")
 
-CONFIG_PATH = ""
-
+CONFIG_NAME = "config.json"
+print("## config_name : ", CONFIG_NAME)
 
 def main(config: Dict):
     parser = argparse.ArgumentParser()
@@ -29,7 +29,6 @@ def main(config: Dict):
     g.add_argument("--model_id", type=str, default=config["config"]["model_id"], help="model id")
     g.add_argument("--chunk_size", type=int, default=config["config"]["chunk_size"], help="data chunk size")
     g.add_argument("--top_k", type=int, default=config["config"]["top_k"], help="How many documents are retrieved")
-    g.add_argument("--data_path", type=str, default=config["path"]["data_path"], help="data path")
     g.add_argument("--db_name", type=str, default=config["path"]["db_name"], help="data index name to save")
     g.add_argument("--cache_dir", type=str, default="./cache", help="cache directory path")
     g.add_argument("--template_name", type=str, default=config["path"]["template_name"], help="What template to load")
@@ -37,7 +36,6 @@ def main(config: Dict):
     args = parser.parse_args()
 
     print("## Settings ##")
-    print("## data_path : ", args.data_path)
     print("## db_name : ", args.db_name)
     print("## top_k : ", args.top_k)
     print("## chunk_size : ", args.chunk_size)
@@ -51,35 +49,51 @@ def main(config: Dict):
             es_password=ES_PASSWORD,
             es_api_key=ES_API_KEY,
             index_name=args.db_name,
-            embedding=HuggingFaceEmbeddings(model_name=args.model_id)
+            embedding=HuggingFaceEmbeddings(model_name=args.model_id, model_kwargs={"device": "cuda:0"},)
         )
     
     def load_model():
         torch.cuda.empty_cache()
 
-        tokenizer = AutoTokenizer.from_pretrained(args.model_id) 
-        model = AutoModelForSeq2SeqLM.from_pretrained(args.model_id, cache_dir=args.cache_dir) 
+        tokenizer = AutoTokenizer.from_pretrained(args.model_id, cache_dir=args.cache_dir)
+        tokenizer.pad_token = tokenizer.eos_token
+        # terminators = [
+        #     tokenizer.eos_token_id,
+        #     tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        # ]
+
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, 
+                                                     cache_dir=args.cache_dir,
+                                                     device_map=args.device,
+                                                     low_cpu_mem_usage=True) 
+        model.eval()
+
+        model_config = PretrainedConfig(
+            max_length = config['inference']['max_length'],
+            do_sample = config['inference']['do_sample'],
+            num_beams = config['inference']['num_beams'],
+            temperature = config['inference']['temperature'],
+            top_k = config['inference']['top_k'],
+            top_p = config['inference']['top_p'],
+            no_repeat_ngram_size = config['inference']['no_repeat_ngram_size'],
+        )
+
         pipe = pipeline(
                 "text2text-generation",
-                model=model, 
+                model=model,
+                config=model_config,
                 tokenizer=tokenizer, 
-                max_length=256,
-                device=-1
-            )
+                max_length=config['inference']['max_length'],
+                device=config['device']
+        )
+
         llm = HuggingFacePipeline(pipeline=pipe)
         print(f"## Get {args.model_id} ready to go ##")
 
         with open(f'templates/{args.template_name}.txt', 'r') as f:
             template = f
-        
-            template = """
-            나는 외국인 노동자를 위한 챗봇.~~
-            When I don't know the answer I say I don't know.
-            I know context: {context}
-            when asked: {question}
-            my response using only information in the context is: 
-            """
 
+        print('## template : ', template)
         prompt_informed = PromptTemplate(template=template, input_variables=["context", "question"])
         return LLMChain(prompt=prompt_informed, llm=llm)
     
@@ -91,10 +105,10 @@ def main(config: Dict):
     print("## Conversation Start !! ##")
     print(f'## We will retrieve top-{args.top_k} relevant documents!')
     while True:
-        query = input("User query >> ")
-        print("user question : ", query)
+        query = input("질문 >> ")
+        print("질문 : ", query)
         similar_docs = db.similarity_search(query)
-        print(f"## The most relevant top-{args.top_k} passage:\n")
+        print(f"## 가장 유사도 높은 top-{args.top_k} passage:\n")
         for i in range(args.top_k):
             document = similar_docs[i].page_content
             print(f"- top{i+1} : {document}")
@@ -103,12 +117,12 @@ def main(config: Dict):
         informed_context= ' '.join([x.page_content for x in similar_docs[:args.top_k]])
         informed_response = chatbot_model.run(context=informed_context,question=query)
 
-        print(f"\tAnswer  : {informed_response}")
+        print(f"\t답변  : {informed_response}")
 
         
 
 if __name__ == "__main__":
-    with open(f'configs/{CONFIG_PATH}', 'r') as f:
+    with open(f'configs/{CONFIG_NAME}', 'r') as f:
         config = json.load(f)
     
     main(config=config)
