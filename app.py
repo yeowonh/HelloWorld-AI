@@ -3,10 +3,10 @@ from flask_ngrok import run_with_ngrok
 from flask_cors import CORS
 from pymongo import MongoClient
 import os
-from model import ChatModel, SummaryModel
+from model_integrated import BllossomModel
 import json
 
-CONFIG_NAME = "chat_config.json"
+CONFIG_NAME = "config.json"
 print("## config_name : ", CONFIG_NAME)
 
 with open(f'configs/{CONFIG_NAME}', 'r') as f:
@@ -27,6 +27,8 @@ except Exception as e:
     raise Exception(
         "The following error occurred: ", e)
 
+model = BllossomModel()
+
 @app.route('/')
 def hello_world():
     return 'Hello, World!'
@@ -37,7 +39,7 @@ def get_echo_call(param):
 
 @app.route('/question', methods=['POST'])
 def question():
-    chat_model = ChatModel()
+    
     # 사용자 쿼리 받기
     query = request.get_json()
 
@@ -52,14 +54,13 @@ def question():
         return jsonify({"error": "No conversation data found"})
     
     # 대화를 모델에 넣어 답변 생성
-    answer = chat_model.get_answer(query["text"], prev_conversation_data)
+    answer = model.get_answer(query["text"], prev_conversation_data)
     
     return answer
 
 
 @app.route('/summary', methods=['POST'])
 def summary():
-    summary_model = SummaryModel()
 
     # MongoDB에서 데이터 가져오기 (이전 대화 n개)
     # time 기준으로 최신순 정렬
@@ -71,7 +72,7 @@ def summary():
     
     
     # 대화를 모델에 넣어 요약문 생성
-    summarization = summary_model.get_summary(prev_conversation_data)
+    summarization = model.get_summary(prev_conversation_data)
     
     return summarization
 

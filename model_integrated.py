@@ -17,7 +17,7 @@ ES_PASSWORD = os.getenv("ES_PASSWORD")
 ES_API_KEY = os.getenv("ES_API_KEY")
 OPENAI_KEY = os.getenv("OPENAI_KEY")
 
-CONFIG_NAME = "chat_config.json"
+CONFIG_NAME = "config.json"
 print("## config_name : ", CONFIG_NAME)
 
 with open(f'configs/{CONFIG_NAME}', 'r') as f:
@@ -110,15 +110,15 @@ class BllossomModel:
     with torch.no_grad():
         outputs = self.chatbot_model.generate(
                 source.to(config['device']),
-                max_new_tokens=config['inference']['max_new_tokens'],
+                max_new_tokens=config['chat_inference']['max_new_tokens'],
                 eos_token_id=self.terminators,
                 pad_token_id=self.tokenizer.eos_token_id,
-                do_sample=config['inference']['do_sample'],
-                num_beams=config['inference']['num_beams'],
-                temperature=config['inference']['temperature'],
-                top_k=config['inference']['top_k'],
-                top_p=config['inference']['top_p'],
-                no_repeat_ngram_size=config['inference']['no_repeat_ngram_size'],
+                do_sample=config['chat_inference']['do_sample'],
+                num_beams=config['chat_inference']['num_beams'],
+                temperature=config['chat_inference']['temperature'],
+                top_k=config['chat_inference']['top_k'],
+                top_p=config['chat_inference']['top_p'],
+                no_repeat_ngram_size=config['chat_inference']['no_repeat_ngram_size'],
             )
     
     inference = self.tokenizer.decode(outputs[0][source.shape[-1]:], skip_special_tokens=True)
@@ -143,15 +143,15 @@ class BllossomModel:
     with torch.no_grad():
         outputs = self.chatbot_model.generate(
                 source.to(config['device']),
-                max_new_tokens=config['inference']['max_new_tokens'],
+                max_new_tokens=config['summary_inference']['max_new_tokens'],
                 eos_token_id=self.terminators,
                 pad_token_id=self.tokenizer.eos_token_id,
-                do_sample=config['inference']['do_sample'],
-                num_beams=config['inference']['num_beams'],
-                temperature=config['inference']['temperature'],
-                top_k=config['inference']['top_k'],
-                top_p=config['inference']['top_p'],
-                no_repeat_ngram_size=config['inference']['no_repeat_ngram_size'],
+                do_sample=config['summary_inference']['do_sample'],
+                num_beams=config['summary_inference']['num_beams'],
+                temperature=config['summary_inference']['temperature'],
+                top_k=config['summary_inference']['top_k'],
+                top_p=config['summary_inference']['top_p'],
+                no_repeat_ngram_size=config['summary_inference']['no_repeat_ngram_size'],
             )
     
     inference = self.tokenizer.decode(outputs[0][source.shape[-1]:], skip_special_tokens=True)
