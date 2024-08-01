@@ -62,7 +62,7 @@ def preprocess_dialog(dialog: list[dict], current_query=None) -> str:
 
     if len(dialog) != 0:
         for cvt in dialog:
-            chat.append(f"{cvt['sender']}: {cvt['content']}")
+            chat.append(f"{cvt['sender']}: {cvt['contents']}")
     
     if current_query != None:
         chat.append(f"user: {current_query}")
@@ -84,15 +84,15 @@ class BllossomModel:
 
     self.db = None
 
-  def get_answer(self, query:str, prev_turn: list[dict]) -> str:
+  def get_answer(self, query:str, prev_turn: list[dict], top_k=config['config']['top_k']) -> str:
     print('## Chat mode ##')
     if self.db == None:
         print('## Loading DB... ##')
         self.db = load_db()
 
-    print(f"## We will retrieve top-{config['config']['top_k']} relevant documents and Answer ##")
+    print(f"## We will retrieve top-{top_k} relevant documents and Answer ##")
     similar_docs = self.db.similarity_search(query)
-    informed_context= ' '.join([x.page_content for x in similar_docs[:config['config']['top_k']]])
+    informed_context= ' '.join([x.page_content for x in similar_docs[:top_k]])
 
     PROMPT = f"""당신은 유능한 AI 어시스턴트입니다. [관련 문서]를 참조하여, [대화]에 대한 적절한 [답변]을 생성해주세요.\n\n[관련 문서]\n{informed_context}"""
     QUERY_PROMPT = f"""{preprocess_dialog(prev_turn, query)}\nbot: """
@@ -116,7 +116,7 @@ class BllossomModel:
                 do_sample=config['chat_inference']['do_sample'],
                 num_beams=config['chat_inference']['num_beams'],
                 temperature=config['chat_inference']['temperature'],
-                top_k=config['chat_inference']['top_k'],
+                top_k=top_k,
                 top_p=config['chat_inference']['top_p'],
                 no_repeat_ngram_size=config['chat_inference']['no_repeat_ngram_size'],
             )
