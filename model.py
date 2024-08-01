@@ -90,7 +90,7 @@ class ChatModel:
 
   """
   def get_answer(self, query:str, prev_turn: list[dict]) -> str:
-    print(f'## We will retrieve top-{config['config']['top_k']} relevant documents and Answer')
+    print(f"## We will retrieve top-{config['config']['top_k']} relevant documents and Answer")
     similar_docs = self.db.similarity_search(query)
     informed_context= ' '.join([x.page_content for x in similar_docs[:config['config']['top_k']]])
 

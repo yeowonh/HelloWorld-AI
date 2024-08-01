@@ -82,14 +82,13 @@ class BllossomModel:
     print('## Loading Model... ##')
     self.chatbot_model = load_model()
 
-  """
-  시간 순 (오래된 거 -> 최신)으로 정렬된 dict list가 들어옴
-  [{"sender" : , "content" : }, ...]
-  """
+    self.db = None
+
   def get_answer(self, query:str, prev_turn: list[dict]) -> str:
     print('## Chat mode ##')
-    print('## Loading DB... ##')
-    self.db = load_db()
+    if self.db == None:
+        print('## Loading DB... ##')
+        self.db = load_db()
 
     print(f"## We will retrieve top-{config['config']['top_k']} relevant documents and Answer ##")
     similar_docs = self.db.similarity_search(query)
@@ -126,7 +125,7 @@ class BllossomModel:
 
     return inference
 
-def get_summary(self, dialog: list[dict]) -> str:
+  def get_summary(self, dialog: list[dict]) -> str:
     print('## We will summary dialog ##')
 
     PROMPT = f"""당신은 유능한 AI 어시스턴트입니다. [대화]를 보고, [요약문]을 생성해주세요.\n"""

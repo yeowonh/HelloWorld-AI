@@ -18,7 +18,6 @@ from langchain_elasticsearch import ElasticsearchStore
 from data import CustomDataset
 
 
-
 load_dotenv(verbose=True)
 ES_CLOUD_ID = os.getenv("ES_CLOUD_ID")
 ES_USER = os.getenv("ES_USER")

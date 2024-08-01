@@ -10,3 +10,4 @@ pymongo
 flask
 flask_ngrok
 flask_cors
+ipykernel
