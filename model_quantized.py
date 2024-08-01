@@ -70,16 +70,15 @@ def load_model(terminators):
             n_gpu_layers=-1,
             n_batch=config['config']['n_batch'],
             n_ctx = config['config']['n_ctx'],
-            temperature=config['inference']['temperature'],
-            top_p=config['inference']['top_p'],
-            top_k= config['inference']['top_k'],
-            max_tokens=config['inference']['max_length'],
-            repeat_penalty=config['inference']['repeat_penalty'],
+            temperature=config['chat_inference']['temperature'],
+            top_p=config['chat_inference']['top_p'],
+            top_k= config['chat_inference']['top_k'],
+            max_tokens=config['summary_inference']['max_length'],
+            repeat_penalty=config['chat_inference']['repeat_penalty'],
             stop=terminators,
             verbose=True
     )
     
-    model.eval()
     return model
 
 
@@ -139,16 +138,8 @@ class BllossomModel:
 
     with torch.no_grad():
         outputs = self.chatbot_model.invoke(
-                source.to(config['device']),
-                max_tokens=config['chat_inference']['max_new_tokens'],
-                eos_token_id=self.terminators,
-                pad_token_id=self.tokenizer.eos_token_id,
-                do_sample=config['chat_inference']['do_sample'],
-                num_beams=config['chat_inference']['num_beams'],
-                temperature=config['chat_inference']['temperature'],
-                top_k=config['chat_inference']['top_k'],
-                top_p=config['chat_inference']['top_p'],
-                no_repeat_ngram_size=config['chat_inference']['no_repeat_ngram_size'],
+                source,
+                max_tokens=config['chat_inference']['max_new_tokens']
             )
     # inference = self.tokenizer.decode(outputs[0][source.shape[-1]:], skip_special_tokens=True)
 
@@ -174,16 +165,8 @@ class BllossomModel:
 
     with torch.no_grad():
         outputs = self.chatbot_model.invoke(
-                source.to(config['device']),
-                max_new_tokens=config['summary_inference']['max_new_tokens'],
-                eos_token_id=self.terminators,
-                pad_token_id=self.tokenizer.eos_token_id,
-                do_sample=config['summary_inference']['do_sample'],
-                num_beams=config['summary_inference']['num_beams'],
-                temperature=config['summary_inference']['temperature'],
-                top_k=config['summary_inference']['top_k'],
-                top_p=config['summary_inference']['top_p'],
-                no_repeat_ngram_size=config['summary_inference']['no_repeat_ngram_size'],
+                source,
+                max_new_tokens=config['summary_inference']['max_new_tokens']
             )
     
     # inference = self.tokenizer.decode(outputs[0][source.shape[-1]:], skip_special_tokens=True)
