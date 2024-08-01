@@ -11,3 +11,4 @@ flask
 flask_ngrok
 flask_cors
 ipykernel
+llama-cpp-python
