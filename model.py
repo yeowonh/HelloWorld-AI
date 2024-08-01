@@ -27,53 +27,73 @@ with open(f'configs/{CONFIG_NAME}', 'r') as f:
 import socket
 socket.setdefaulttimeout(500)
 
+def load_db():
+    torch.cuda.empty_cache()
+    return ElasticsearchStore(
+        es_cloud_id=ES_CLOUD_ID,
+        es_user=ES_USER,
+        es_password=ES_PASSWORD,
+        es_api_key=ES_API_KEY,
+        index_name=config['path']['db_name'],
+        embedding = OpenAIEmbeddings(openai_api_key=OPENAI_KEY)
+    )
+
+def load_tokenizer():
+    tokenizer = AutoTokenizer.from_pretrained(config['config']['model_id'])
+    tokenizer.pad_token = tokenizer.eos_token
+    terminators = [
+        tokenizer.eos_token_id,
+        tokenizer.convert_tokens_to_ids("<|eot_id|>")
+    ]
+    return tokenizer, terminators
+
+def load_model():
+    torch.cuda.empty_cache()
+    model = AutoModelForCausalLM.from_pretrained(config['config']['model_id'], 
+                                                    device_map=config['device'],
+                                                    low_cpu_mem_usage=True) 
+    model.eval()
+    return model
+
+
+# 대화 전처리
+def preprocess_dialog(dialog: list[dict], current_query=None) -> str:
+    chat = ["[대화]"]
+    for cvt in dialog:
+        chat.append(f"{cvt['sender']}: {cvt['content']}")
+    
+    if current_query != None:
+        chat.append(f"user: {current_query}")
+
+    chat = "\n".join(chat)
+    return chat
 
 class ChatModel:
   def __init__(self):
     self.initialize()
     
-  
   def initialize(self):
-    self.tokenizer = AutoTokenizer.from_pretrained(config['config']['model_id'])
-    self.tokenizer.pad_token = self.tokenizer.eos_token
-    self.terminators = [
-        self.tokenizer.eos_token_id,
-        self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-    ]
-    
-    def load_db():
-        torch.cuda.empty_cache()
-        return ElasticsearchStore(
-            es_cloud_id=ES_CLOUD_ID,
-            es_user=ES_USER,
-            es_password=ES_PASSWORD,
-            es_api_key=ES_API_KEY,
-            index_name=config['path']['db_name'],
-            embedding = OpenAIEmbeddings(openai_api_key=OPENAI_KEY)
-        )
-    
-    def load_model():
-        torch.cuda.empty_cache()
-        model = AutoModelForCausalLM.from_pretrained(config['config']['model_id'], 
-                                                     device_map=config['device'],
-                                                     low_cpu_mem_usage=True) 
-        model.eval()
-        return model
-    
     print('## Loading DB... ##')
     self.db = load_db()
-    
+
+    print('## Loading Tokenizer... ##')
+    self.tokenizer, self.terminators = load_tokenizer()
+
     print('## Loading Model... ##')
     self.chatbot_model = load_model()
-    print(f'## We will retrieve top-{config['config']['top_k']} relevant documents!')
 
-  
-  def get_answer(self, query:str, prev_turn: list) -> str:
+  """
+  시간 순 (오래된 거 -> 최신)으로 정렬된 dict list가 들어옴
+  [{"sender" : , "content" : }, ...]
+
+  """
+  def get_answer(self, query:str, prev_turn: list[dict]) -> str:
+    print(f'## We will retrieve top-{config['config']['top_k']} relevant documents and Answer')
     similar_docs = self.db.similarity_search(query)
     informed_context= ' '.join([x.page_content for x in similar_docs[:config['config']['top_k']]])
 
-    PROMPT = f"""당신은 유능한 AI 어시스턴트입니다. [관련 문서]를 참조하여, [대화]에 적절한 답변을 생성해주세요.\n\n[관련 문서]: {informed_context}"""
-    QUERY_PROMPT = f"""[대화]: {prev_turn}\n{query}"""
+    PROMPT = f"""당신은 유능한 AI 어시스턴트입니다. [관련 문서]를 참조하여, [대화]에 대한 적절한 [답변]을 생성해주세요.\n\n[관련 문서]\n{informed_context}"""
+    QUERY_PROMPT = f"""{preprocess_dialog(prev_turn, query)}\nbot: """
     message = [
                 {"role": "system", "content": PROMPT},
                 {"role": "user", "content": QUERY_PROMPT},
@@ -102,3 +122,51 @@ class ChatModel:
     inference = self.tokenizer.decode(outputs[0][source.shape[-1]:], skip_special_tokens=True)
 
     return inference
+
+
+
+class SummaryModel:
+    def __init__(self):
+        self.initialize()
+    
+    def initialize(self):
+        print('## Loading Tokenizer... ##')
+        self.tokenizer, self.terminators = load_tokenizer()
+
+        print('## Loading Model... ##')
+        self.chatbot_model = load_model()
+    
+
+    def get_summary(self, dialog: list[dict]) -> str:
+        print('## We will summary dialog')
+
+        PROMPT = f"""당신은 유능한 AI 어시스턴트입니다. [대화]를 보고, [요약문]을 생성해주세요.\n"""
+        message = [
+                    {"role": "system", "content": PROMPT},
+                    {"role": "user", "content": preprocess_dialog(dialog) + "\n\n[요약문]\n"},
+        ]
+
+        source = self.tokenizer.apply_chat_template(
+                    message,
+                    add_generation_prompt=True,
+                    return_tensors="pt",
+        )
+
+        with torch.no_grad():
+            outputs = self.chatbot_model.generate(
+                    source.to(config['device']),
+                    max_new_tokens=config['inference']['max_new_tokens'],
+                    eos_token_id=self.terminators,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    do_sample=config['inference']['do_sample'],
+                    num_beams=config['inference']['num_beams'],
+                    temperature=config['inference']['temperature'],
+                    top_k=config['inference']['top_k'],
+                    top_p=config['inference']['top_p'],
+                    no_repeat_ngram_size=config['inference']['no_repeat_ngram_size'],
+                )
+        
+        inference = self.tokenizer.decode(outputs[0][source.shape[-1]:], skip_special_tokens=True)
+
+        return inference
+
