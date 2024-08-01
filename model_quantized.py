@@ -59,10 +59,10 @@ def load_model(terminators):
     # quantized model download
 
     if os.path.isfile(config['config']['quantized_path']) == False:
-        model = AutoModelForCausalLM.from_pretrained(REPO_PATH)
+        model = AutoModelForCausalLM.from_pretrained(REPO_PATH, model_file="", model_type="llama")
         model.save_pretrained(config['config']['quantized_path'])
 
-        print(f'## Model saved to {config['config']['quantized_path']}')
+        print(f"## Model saved to {config['config']['quantized_path']}")
 
 
     model = LlamaCpp(
