@@ -33,24 +33,20 @@ def main(config: Dict):
     g.add_argument("--model_id", type=str, default=config["config"]["model_id"], help="model id")
     g.add_argument("--chunk_size", type=int, default=config["config"]["chunk_size"], help="data chunk size")
     g.add_argument("--top_k", type=int, default=config["config"]["top_k"], help="How many documents are retrieved")
-    g.add_argument("--db_name", type=str, default=config["path"]["db_name"], help="data index name to save")
     g.add_argument("--cache_dir", type=str, default="./cache", help="cache directory path")
     g.add_argument("--template_name", type=str, default=config["path"]["template_name"], help="What template to load")
     
     args = parser.parse_args()
 
     print("## Settings ##")
-    print("## db_name : ", args.db_name)
+    print("## model_id : ", args.model_id)
     print("## top_k : ", args.top_k)
     print("## chunk_size : ", args.chunk_size)
     print("## template_name : ", args.template_name)
     
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, cache_dir=args.cache_dir)
     tokenizer.pad_token = tokenizer.eos_token
-    terminators = [
-        tokenizer.eos_token_id,
-        tokenizer.convert_tokens_to_ids("<|eot_id|>")
-    ]
+    print('## EOS token : ',tokenizer.eos_token)
 
     def load_db():
         torch.cuda.empty_cache()
@@ -67,25 +63,58 @@ def main(config: Dict):
     
     def load_model():
         torch.cuda.empty_cache()
+
+        
+
         model = AutoModelForCausalLM.from_pretrained(args.model_id, 
                                                      cache_dir=args.cache_dir,
                                                      device_map=config['device'],
                                                      low_cpu_mem_usage=True) 
         model.eval()
-        return model
 
+        model_config = PretrainedConfig(
+            max_length = config['inference']['max_length'],
+            do_sample = config['inference']['do_sample'],
+            num_beams = config['inference']['num_beams'],
+            temperature = config['inference']['temperature'],
+            top_k = config['inference']['top_k'],
+            top_p = config['inference']['top_p'],
+            no_repeat_ngram_size = config['inference']['no_repeat_ngram_size'],
+        )
+
+        pipe = pipeline(
+                "text2text-generation",
+                model=model,
+                config=model_config,
+                tokenizer=tokenizer, 
+                max_length=config['inference']['max_length']
+        )
+
+        llm = HuggingFacePipeline(pipeline=pipe)
+        print(f"## Get {args.model_id} ready to go ##")
+
+        # with open(f'templates/{args.template_name}.txt', 'r') as f:
+        #     template = f.readlines()
+        #     template = ''.join(template)
+
+        template_informed = """
+        당신은 유능한 AI 어시스턴트입니다.
+        [관련 문서]를 참조하여 [질문]에 대한 적절한 답변을 생성해주세요.
+        [관련 문서] : {context}
+        [질문] : {question}
+        [답변] : """
+        prompt_informed = PromptTemplate(template=template_informed, input_variables=["context", "question"])
         
+        
+        return LLMChain(prompt=prompt_informed, llm=llm)
     
     print('## Loading DB... ##')
     db = load_db()
-    
     print('## Loading Model... ##')
     chatbot_model = load_model()
+
     print("## Conversation Start !! ##")
     print(f'## We will retrieve top-{args.top_k} relevant documents!')
-
-    
-    
     while True:
         query = input("질문 >> ")
         similar_docs = db.similarity_search(query)
@@ -96,35 +125,10 @@ def main(config: Dict):
         
         ## Ask Local LLM context informed prompt
         informed_context= ' '.join([x.page_content for x in similar_docs[:args.top_k]])
-        # informed_response = chatbot_model.invoke({"context" : informed_context, "question" : query})
-        PROMPT = f"""당신은 유능한 AI 어시스턴트입니다. [관련 문서]를 참조하여 [질문]에 대한 적절한 [답변]을 생성해주세요.\n\n[관련 문서]:{informed_context}"""
 
-        message = [
-                {"role": "system", "content": PROMPT},
-                {"role": "user", "content": query},
-        ]
+        informed_response = chatbot_model.run(context=informed_context,question=query, stop=tokenizer.eos_token)
 
-        source = tokenizer.apply_chat_template(
-                message,
-                add_generation_prompt=True,
-                return_tensors="pt",
-            )
-
-        outputs = chatbot_model.generate(
-            source.to(config['device']),
-            max_new_tokens=config['inference']['max_new_tokens'],
-            eos_token_id=terminators,
-            pad_token_id=tokenizer.eos_token_id,
-            do_sample=config['inference']['do_sample'],
-            num_beams=config['inference']['num_beams'],
-            temperature=config['inference']['temperature'],
-            top_k=config['inference']['top_k'],
-            top_p=config['inference']['top_p'],
-            no_repeat_ngram_size=config['inference']['no_repeat_ngram_size'],
-        )
-        inference = tokenizer.decode(outputs[0][source.shape[-1]:], skip_special_tokens=True)
-
-        print(f"\n\n답변  : {inference}")
+        print(f"\n\n답변  : {informed_response}")
 
         
 if __name__ == "__main__":
