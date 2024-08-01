@@ -19,7 +19,7 @@ run_with_ngrok(app)
 # MongoDB 연결 설정
 try:
     # 아직 URI 설정 안된 상태
-    client = MongoClient(os.environ.get('MONGO_URI', 'mongodb://localhost:27017/'))
+    client = MongoClient("mongodb+srv://ghkdwngns:01087651083@sekssak.gfbqnde.mongodb.net/")
     db = client['chatdb']
     collection = db['translate_log']
 
