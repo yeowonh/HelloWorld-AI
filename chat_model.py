@@ -7,15 +7,10 @@ from dotenv import load_dotenv
 import argparse
 from typing import Dict
 import json
-from langchain.chains import LLMChain
-from langchain_core.prompts import PromptTemplate
-from langchain_community.llms import HuggingFacePipeline
-from transformers import AutoTokenizer, pipeline, AutoModelForCausalLM, PretrainedConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 from langchain_elasticsearch import ElasticsearchStore
-# from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
-
 
 load_dotenv(verbose=True)
 ES_CLOUD_ID = os.getenv("ES_CLOUD_ID")
@@ -97,11 +92,11 @@ def main(config: Dict):
         ## Ask Local LLM context informed prompt
         informed_context= ' '.join([x.page_content for x in similar_docs[:args.top_k]])
         # informed_response = chatbot_model.invoke({"context" : informed_context, "question" : query})
-        PROMPT = f"""당신은 유능한 AI 어시스턴트입니다. [관련 문서]를 참조하여 [질문]에 대한 적절한 [답변]을 생성해주세요.\n\n[관련 문서]:{informed_context}"""
+        PROMPT = f"""당신은 유능한 AI 어시스턴트입니다. [관련 문서]를 참조하여 [질문]에 대한 적절한 답변을 생성해주세요.\n\n[관련 문서]: {informed_context}"""
 
         message = [
                 {"role": "system", "content": PROMPT},
-                {"role": "user", "content": query},
+                {"role": "user", "content": "[질문]: "+query},
         ]
 
         source = tokenizer.apply_chat_template(
@@ -109,22 +104,22 @@ def main(config: Dict):
                 add_generation_prompt=True,
                 return_tensors="pt",
             )
-
-        outputs = chatbot_model.generate(
-            source.to(config['device']),
-            max_new_tokens=config['inference']['max_new_tokens'],
-            eos_token_id=terminators,
-            pad_token_id=tokenizer.eos_token_id,
-            do_sample=config['inference']['do_sample'],
-            num_beams=config['inference']['num_beams'],
-            temperature=config['inference']['temperature'],
-            top_k=config['inference']['top_k'],
-            top_p=config['inference']['top_p'],
-            no_repeat_ngram_size=config['inference']['no_repeat_ngram_size'],
-        )
+        with torch.no_grad():
+            outputs = chatbot_model.generate(
+                source.to(config['device']),
+                max_new_tokens=config['inference']['max_new_tokens'],
+                eos_token_id=terminators,
+                pad_token_id=tokenizer.eos_token_id,
+                do_sample=config['inference']['do_sample'],
+                num_beams=config['inference']['num_beams'],
+                temperature=config['inference']['temperature'],
+                top_k=config['inference']['top_k'],
+                top_p=config['inference']['top_p'],
+                no_repeat_ngram_size=config['inference']['no_repeat_ngram_size'],
+            )
         inference = tokenizer.decode(outputs[0][source.shape[-1]:], skip_special_tokens=True)
 
-        print(f"\n\n답변  : {inference}")
+        print(f"\n\n답변:{inference}")
 
         
 if __name__ == "__main__":
