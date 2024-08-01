@@ -59,8 +59,10 @@ def load_model():
 # 대화 전처리
 def preprocess_dialog(dialog: list[dict], current_query=None) -> str:
     chat = ["[대화]"]
-    for cvt in dialog:
-        chat.append(f"{cvt['sender']}: {cvt['content']}")
+
+    if len(dialog) != 0:
+        for cvt in dialog:
+            chat.append(f"{cvt['sender']}: {cvt['content']}")
     
     if current_query != None:
         chat.append(f"user: {current_query}")

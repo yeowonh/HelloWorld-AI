@@ -5,7 +5,6 @@ from pymongo import MongoClient
 import os
 from model import ChatModel, SummaryModel
 import json
-import pymongo
 
 CONFIG_NAME = "chat_config.json"
 print("## config_name : ", CONFIG_NAME)
@@ -55,7 +54,7 @@ def question():
     # 대화를 모델에 넣어 답변 생성
     answer = chat_model.get_answer(query["text"], prev_conversation_data)
     
-    return jsonify({"answer": answer})
+    return answer
 
 
 @app.route('/summary', methods=['POST'])
@@ -74,7 +73,7 @@ def summary():
     # 대화를 모델에 넣어 요약문 생성
     summarization = summary_model.get_summary(prev_conversation_data)
     
-    return jsonify({"summary": summarization})
+    return summarization
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
